@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="SRT Master Blaster:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/SRT_Master_Blaster_jar</output-path>
+    <root id="archive" name="SRT Master Blaster.jar">
+      <element id="module-output" name="SRT Master Blaster" />
+    </root>
+  </artifact>
+</component>

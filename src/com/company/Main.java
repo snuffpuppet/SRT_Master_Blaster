@@ -23,7 +23,7 @@ public class Main {
         // write your code here
         System.out.println("G'day World!");
         Tokeniser tokeniser = new Tokeniser();
-        tokeniser.add("[1-9][0-9]*", 1); // index
+        tokeniser.add("[1-9][0-9]*[\\r\\n]", 1); // index
         tokeniser.add("[0-9][0-9]:[0-9][0-9]:[0-9][0-9],[0-9][0-9][0-9]", 2); // timestamp
         tokeniser.add("-->", 3); // span
         tokeniser.add("[\\S ]+", 4); // text
@@ -35,21 +35,23 @@ public class Main {
 
         try {
             tokeniser.tokenise(content);
-/*
-            for (Tokeniser.Token tok : tokeniser.getTokens()) {
-                System.out.println("" + tok.token + " " + tok.sequence);
-            }
-            */
         } catch (ParserException e) {
             System.out.println(e.getMessage());
         }
 
-        // Now build the sequencer structure
-        SubtitleSequence srtSequence = new SubtitleSequence(tokeniser.getTokens());
+        // Now build a Display State Table to map timings to display states so we can arbitrarily access them
+        DisplayStateTable stateTable = new DisplayStateTable(tokeniser.getTokens(), tokeniser.getTokens().size()/5);
 
-        SrtScheduler srtScheduler = new SrtScheduler(srtSequence);
+        // anounce to the world that we are ready to do this thing
         System.out.println("-------------- Starting --------------");
-        srtScheduler.schedule();
+
+
+        // Initialise the AV tracker (eventually with the player / mic / conciousness we are using)
+        AvTracker avTracker = new AvTracker();
+
+        // Run the sequencer to display the subtitles
+        SubtitleSequencer sequencer = new SubtitleSequencer(avTracker, stateTable);
+        sequencer.display();
 
         System.exit(0);
     }
