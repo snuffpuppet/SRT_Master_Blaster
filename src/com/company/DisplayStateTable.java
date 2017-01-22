@@ -47,14 +47,6 @@ public class DisplayStateTable {
             this.eventIndex = eventIndex;
         }
     }
-    /*
-    private class EmptyNode extends TreeNode {
-        public EmptyNode() {
-            this.isTerminal = false;
-            this.isEmpty = true;
-        }
-    }
-*/
 
     private class DecimalNode extends TreeNode {
         TreeNode[] next = new TreeNode[10];
@@ -62,11 +54,6 @@ public class DisplayStateTable {
         public DecimalNode(int value) {
             this.value = value;
             this.isTerminal = false;
-            /*
-            for (int i=0; i<10; i++) {
-                this.next[i] = new EmptyNode();
-            }
-            */
         }
     }
 
@@ -119,13 +106,6 @@ public class DisplayStateTable {
                         subtitle = new SubtitleEvent();
                         silence = new SilenceEvent();
                     }
-                    /*
-                    if (sub.sequence > 0) { // last object finished, pop this one in the list
-                        this.subtitles.addLast(sub);
-                        sub = new Subtitle();
-                    }
-                    sub.sequence = Integer.parseInt(tok.sequence);
-                    */
                     break;
                 case 2: // SRT tiestamp --> SRT timestamp
                     // the first one will be the subtitle display event time
@@ -199,7 +179,7 @@ public class DisplayStateTable {
         }
     }
 
-    private DisplayEvent findNearestStorageEvent(TerminalNode tnode, long msecOffset)
+    private DisplayEvent findNearestEvent(TerminalNode tnode, long msecOffset)
     {
         // Look through the event storage (rather than the index) to find the closest earliest one
         DisplayEvent indexedEvent = events[tnode.eventIndex];
@@ -219,25 +199,54 @@ public class DisplayStateTable {
 
     }
 
-    private DisplayEvent findNearestIndexEvent(TreeNode node, long msecOffset) throws DisplayStateException
+    private DisplayEvent findNearestIndex(TreeNode node, int thisDigit, long msecOffset, boolean firstScan) throws DisplayStateException
     {
+        int[][] searchPatterns = {
+                {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, // 0
+                {1, 0, 2, 3, 4, 5, 6, 7, 8, 9}, // 1
+                {2, 1, 3, 0, 4, 5, 6, 7, 8, 9}, // 2
+                {3, 2, 4, 1, 5, 0, 6, 7, 8, 9}, // 3
+                {4, 3, 5, 2, 6, 1, 7, 0, 8, 9}, // 4
+                {5, 4, 6, 3, 7, 2, 8, 1, 9, 0}, // 5
+                {6, 5, 7, 4, 8, 3, 9, 2, 1, 0}, // 6
+                {7, 6, 8, 5, 9, 4, 3, 2, 1, 0}, // 7
+                {8, 7, 9, 6, 5, 4, 3, 2, 1, 0}, // 8
+                {9, 8, 7, 6, 5, 4, 3, 2, 1, 0}  // 9
+        };
         // The data structure mandates that there must be a digit in this index node so we scan for one
         // no more matching digits in the index, scan this nodes index to find the nearest and scan the event array
         if (node.isTerminal) {
             // bingo - we have the nearest point in the event array, now look for the one just earlier than the offset
-            return findNearestStorageEvent((TerminalNode)node, msecOffset);
+            return findNearestEvent((TerminalNode)node, msecOffset);
         }
         else {
-            // next level in the index, run through the digits till we find something
-            for (int digit = 0; digit < 10; digit++) {
-                DecimalNode decNode = (DecimalNode)node;
-                if (decNode.next[digit] != null) {
-                    // found a matching digit at this level, follow it to the event array
-                    return findNearestIndexEvent(decNode.next[digit], msecOffset);
+            // First use the above search pattern to find the closest branch to the one we need
+            DecimalNode decNode = (DecimalNode) node;
+            int[] searchPattern = searchPatterns[thisDigit];
+            for (int scanDigit : searchPattern) {
+                // When we change from following nodes to scanning initially, we know that there is no node
+                // that matches the digit we want so we just skip it in the scan
+                // After we find the nearest first branch, the sub branch scans will need to include all digits
+                if (firstScan && (scanDigit == thisDigit)) {
+                    continue;
+                }
+                if (decNode.next[scanDigit] != null) {
+                    if (scanDigit < thisDigit) {
+                        // If the closest match is lower then look for the highest of the lower matches
+                        return findNearestIndex(decNode.next[scanDigit], 9, msecOffset, false);
+                    }
+                    if (scanDigit > thisDigit) {
+                        // If the closest match is higher then look for the lowest of the higher matches
+                        return findNearestIndex(decNode.next[scanDigit], 0, msecOffset, false);
+                    } else { // scanDigit == thisDigit
+                        // digits match, cool - carry on previously calculated scan pattern
+                        return findNearestIndex(decNode.next[scanDigit], thisDigit, msecOffset, false);
+                    }
                 }
             }
+
         }
-        throw new DisplayStateException("Found no DisplayState match for " + msecOffset);
+        throw new DisplayStateException("Corrupt DisplayStateTable - no valid branches found at first unmatched node :" + msecOffset);
     }
 
     // return an event that is current for the offset in milliseconds given
@@ -256,17 +265,17 @@ public class DisplayStateTable {
             thisDigit = (int) (offsetIndex / divisors[divIndex]);
             DecimalNode decNode = (DecimalNode) node;
             if (decNode.next[thisDigit] == null) {
-                return findNearestIndexEvent(decNode, msecOffset);
+                return findNearestIndex(decNode, thisDigit, msecOffset, true);
             } else if (decNode.next[thisDigit].isTerminal) {
                 // perfect match, send the event back
-                return findNearestStorageEvent(((TerminalNode) decNode.next[thisDigit]), msecOffset);
+                return findNearestEvent(((TerminalNode) decNode.next[thisDigit]), msecOffset);
             }
 
             node = decNode.next[thisDigit];
             offsetIndex %= divisors[divIndex];
         }
         //
-        throw new DisplayStateException("Found no DisplayState match for " + msecOffset);
+        throw new DisplayStateException("Corrupt DisplayStateTable - No terminal node found at end of index: " + msecOffset);
     }
 
     /*
