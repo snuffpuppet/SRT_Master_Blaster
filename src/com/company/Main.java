@@ -28,7 +28,11 @@ public class Main {
         tokeniser.add("-->", 3); // span
         tokeniser.add("[\\S ]+", 4); // text
 
-        String content = new String(Files.readAllBytes(Paths.get("/home/adam/dev/SRT_Master_Blaster/Pulp.Fiction.1994.720p.BluRay.x264-SiNNERS.English.srt")));
+        String srtFileName = "/home/adam/dev/SRT_Master_Blaster/Pulp.Fiction.1994.720p.BluRay.x264-SiNNERS.English.srt";
+        if (args.length > 0)
+            srtFileName = args[0];
+
+        String content = new String(Files.readAllBytes(Paths.get(srtFileName)));
         //String content = new String(Files.readAllBytes(Paths.get("/home/adam/dev/SRT_Master_Blaster/Pulp.test.srt")));
         //String content = new String(Files.readAllBytes(Paths.get(args[1])));
 
